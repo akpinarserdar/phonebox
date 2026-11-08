@@ -21,7 +21,7 @@ PhoneBox has two parts: a small **Android app** that runs full screen on the pho
 the pages in a visual editor on the PC: **53 widgets**, **23 templates**, as many pages as you like.
 
 - **Your PC at a glance**: CPU, GPU, RAM, disks, network and ping; the heaviest apps, with "end one instance / end all".
-- **AI coding**: Claude and Codex quotas with a burn-rate forecast; every Claude Code / Codex session — the phone
+- **AI coding**: Claude and Codex quotas with a burn-rate forecast; Codex remaining allowance and local session token details; tap a session to see its model, timing, tokens, context window and recent tool — the phone
   buzzes when one finishes or needs you, and Claude Code's permission prompts show up with **Allow** / **Deny**.
   GitHub review requests and your pull requests with CI status.
 - **Desk companion**: now playing with controls and volume, clocks, weather, sun & moon, air quality, calendar,
@@ -66,7 +66,7 @@ winget-pkgs; once accepted it installs with `winget install ersinkoc.PhoneBox`.
 **Linux** (Ubuntu, Debian, Fedora, Arch…) **and macOS**
 
 ```sh
-sudo apt install adb playerctl          # Fedora: android-tools playerctl · macOS: brew install android-platform-tools
+sudo apt install adb playerctl          # Fedora: android-tools playerctl · macOS: brew install android-platform-tools nowplaying-cli
 git clone https://github.com/ersinkoc/phonebox
 cd phonebox
 ./scripts/install.sh --apk --autostart  # agent + phone app; systemd user service (Linux) or launchd agent (macOS)
@@ -82,8 +82,8 @@ everything again.
 |---|---|---|---|
 | CPU, RAM, network, disks, ping | ✓ | ✓ | ✓ |
 | CPU temperature | LibreHardwareMonitor | ✓ (hwmon) | — |
-| NVIDIA GPU | ✓ | ✓ | — |
-| Now playing + controls | ✓ (any app) | ✓ (MPRIS via `playerctl`) | Spotify, Music |
+| GPU usage | NVIDIA (`nvidia-smi`) | NVIDIA (`nvidia-smi`) | Apple silicon (`ioreg`) |
+| Now playing + controls | ✓ (any app) | ✓ (MPRIS via `playerctl`) | System media, including browser video, with `nowplaying-cli`; Spotify and Music fallback |
 | Volume | ✓ | ✓ (`wpctl` / `pactl`) | ✓ |
 | Processes, end one / all | ✓ | ✓ (your own) | ✓ (your own) |
 | App icons | ✓ | ✓ (icon theme) | ✓ (app bundles) |
@@ -92,6 +92,8 @@ everything again.
 | Claude / Codex quotas & sessions, GitHub, webhooks | ✓ | ✓ | ✓ (Claude token from the Keychain) |
 | Tray icon | ✓ | — (settings in the browser) | — |
 | Start at login | Startup folder | systemd user service | launchd agent |
+
+On macOS, `nowplaying-cli` supplies system media metadata and cover art. The agent labels matching Safari or Chrome tabs as YouTube or YouTube Music. The progress bar advances from the last position supplied by macOS; Safari may report an outdated starting position. Volume follows the selected system output. When macOS does not expose its volume, an optional `m1ddc` installation can read it from a compatible display; display volume is read only in PhoneBox. Unsupported outputs show `n/a`. Apple silicon GPU usage comes from IORegistry when macOS exposes it; temperature, power and VRAM figures may remain unavailable.
 
 </details>
 
@@ -348,7 +350,7 @@ cable, or a port straight on the computer instead of a hub or a front-panel port
 
 <details><summary><b>Some widgets show "—" or "No data".</b></summary>
 
-GPU values need an NVIDIA GPU (`nvidia-smi`), CPU temperature needs LibreHardwareMonitor's web server on port 8085,
+GPU values need an NVIDIA GPU (`nvidia-smi`) on Windows or Linux, or an Apple silicon Mac exposing GPU utilization through IORegistry. CPU temperature needs LibreHardwareMonitor's web server on port 8085,
 GitHub needs `gh auth login`, quotas and sessions need Claude Code / Codex to have been used on this PC.
 </details>
 

@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace PhoneBox.Agent;
 
@@ -14,7 +15,7 @@ public sealed record DiskInfo(string Name, double UsedGb, double TotalGb);
 public sealed record PcSnapshot(double? Cpu, double? CpuTemp, string CpuName, double RamUsedGb, double RamTotalGb,
     GpuInfo? Gpu, double NetDownBps, double NetUpBps, IReadOnlyList<DiskInfo> Disks, long UptimeSec);
 
-/// <summary>Samples CPU, RAM, network, disk and NVIDIA GPU metrics once a second.</summary>
+/// <summary>Samples CPU, RAM, network, disk and GPU metrics once a second.</summary>
 public sealed class SystemMonitor(ILogger<SystemMonitor> log) : BackgroundService
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromMilliseconds(600) };
@@ -75,6 +76,12 @@ public sealed class SystemMonitor(ILogger<SystemMonitor> log) : BackgroundServic
     // Keeps nvidia-smi running and reads one line per second.
     private async Task GpuLoop(CancellationToken ct)
     {
+        if (OperatingSystem.IsMacOS() && RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+        {
+            await AppleGpuLoop(ct);
+            return;
+        }
+
         var name = "GPU";
         while (!ct.IsCancellationRequested)
         {
@@ -99,6 +106,26 @@ public sealed class SystemMonitor(ILogger<SystemMonitor> log) : BackgroundServic
             catch (Exception ex) { log.LogDebug("nvidia-smi: {Msg}", ex.Message); }
             _gpu = null;
             await Task.Delay(TimeSpan.FromSeconds(10), ct);
+        }
+    }
+
+    private async Task AppleGpuLoop(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var output = await RunAsync("ioreg", "-r -c IOAccelerator -l -w0", ct);
+                var name = Regex.Match(output, "\"model\"\\s*=\\s*\"([^\"]+)\"");
+                var usage = Regex.Match(output, "\"Device Utilization %\"\\s*=\\s*(\\d+)");
+                _gpu = name.Success
+                    ? new GpuInfo(name.Groups[1].Value, usage.Success && double.TryParse(usage.Groups[1].Value, out var value)
+                        ? Math.Clamp(value, 0, 100) : null, null, null, null, null, null, null, null)
+                    : null;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+            catch (Exception ex) { log.LogDebug("Apple GPU: {Msg}", ex.Message); _gpu = null; }
+            await Task.Delay(_gpu is null ? 10_000 : 1000, ct);
         }
     }
 

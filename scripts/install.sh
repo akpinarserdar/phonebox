@@ -37,6 +37,10 @@ esac
 rid="$os-$arch"
 
 command -v dotnet >/dev/null || { echo ".NET 10 SDK is required: https://dotnet.microsoft.com/download" >&2; exit 1; }
+if [ -z "${DOTNET_ROOT:-}" ]; then
+  DOTNET_ROOT="$(dotnet --list-runtimes | sed -n '1s/.*\[\(.*\)\/shared\/.*\]/\1/p')"
+  [ -n "$DOTNET_ROOT" ] && export DOTNET_ROOT
+fi
 
 echo "==> Building the agent ($rid)"
 tmp="$(mktemp -d)"
@@ -88,7 +92,7 @@ EOF
   <key>ProgramArguments</key><array><string>$app/PhoneBoxAgent</string></array>
   <key>EnvironmentVariables</key><dict>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-    <key>DOTNET_ROOT</key><string>$(dirname "$(readlink -f "$(command -v dotnet)" 2>/dev/null || command -v dotnet)")</string>
+    <key>DOTNET_ROOT</key><string>$DOTNET_ROOT</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
@@ -111,11 +115,14 @@ if [ "$apk" = 1 ]; then
     (cd "$root/android" && chmod +x gradlew && ./gradlew assembleRelease --console=plain -q)
     apkfile="$root/android/app/build/outputs/apk/release/app-release.apk"
   fi
-  target=()
-  [ -n "$serial" ] && target=(-s "$serial")
   echo "==> Installing $(basename "$apkfile") on the phone"
-  "$adb" "${target[@]}" install -r "$apkfile"
-  "$adb" "${target[@]}" shell am start -n net.oxog.phonebox.deskpanel/.MainActivity >/dev/null
+  if [ -n "$serial" ]; then
+    "$adb" -s "$serial" install -r "$apkfile"
+    "$adb" -s "$serial" shell am start -n net.oxog.phonebox.deskpanel/.MainActivity >/dev/null
+  else
+    "$adb" install -r "$apkfile"
+    "$adb" shell am start -n net.oxog.phonebox.deskpanel/.MainActivity >/dev/null
+  fi
 fi
 
 echo "PhoneBox is running. Settings: http://127.0.0.1:8765"

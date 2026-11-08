@@ -4,8 +4,8 @@ using System.Text.RegularExpressions;
 namespace PhoneBox.Agent;
 
 /// <summary>
-/// Master volume on Linux (PipeWire's wpctl, or PulseAudio's pactl) and macOS (AppleScript). Same API as the Windows
-/// AudioControl; readings are cached for a second because the panel asks every second.
+/// Master volume on Linux (PipeWire's wpctl, or PulseAudio's pactl) and the selected macOS output.
+/// macOS falls back to CoreAudio channels and, for a matching display, optional DDC/CI readback.
 /// </summary>
 public sealed partial class AudioControl
 {
@@ -25,6 +25,7 @@ public sealed partial class AudioControl
 
     public bool SetVolume(int level)
     {
+        if (OperatingSystem.IsMacOS() && Snapshot() is not { CanControl: true }) return false;
         level = Math.Clamp(level, 0, 100);
         var ok = OperatingSystem.IsMacOS()
             ? Sh.Run("osascript", "-e", $"set volume output volume {level} without output muted") is not null
@@ -40,6 +41,7 @@ public sealed partial class AudioControl
 
     public bool ToggleMute()
     {
+        if (OperatingSystem.IsMacOS() && Snapshot() is not { CanControl: true }) return false;
         var ok = OperatingSystem.IsMacOS()
             ? Sh.Run("osascript", "-e", "set volume output muted (not (output muted of (get volume settings)))") is not null
             : Sh.Which("wpctl") is not null
@@ -57,7 +59,12 @@ public sealed partial class AudioControl
         {
             var s = Sh.Run("osascript", "-e", "set v to get volume settings\nreturn ((output volume of v) as string) & \",\" & ((output muted of v) as string)")?.Trim();
             var p = s?.Split(',');
-            return p is { Length: 2 } && int.TryParse(p[0], out var vol) ? new AudioSnapshot(vol, p[1] == "true") : null;
+            if (p is { Length: 2 } && int.TryParse(p[0], out var vol) && bool.TryParse(p[1], out var nativeMuted))
+                return new AudioSnapshot(vol, nativeMuted);
+            var output = MacAudioProbe.SelectedOutput();
+            if (output is null) return null;
+            var level = output.Value.Volume ?? MacAudioProbe.DisplayVolume(output.Value.Id, output.Value.Name);
+            return level is { } measured ? new AudioSnapshot(measured, output.Value.Muted ?? false, false) : null;
         }
         if (Sh.Which("wpctl") is not null)
         {

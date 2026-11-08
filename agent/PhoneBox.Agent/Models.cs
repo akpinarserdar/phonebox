@@ -7,4 +7,4 @@ public sealed record MediaSnapshot(string App, string Title, string Artist, stri
 
 public sealed record AlbumArt(byte[] Bytes, string Mime);
 
-public sealed record AudioSnapshot(int Volume, bool Muted);
+public sealed record AudioSnapshot(int Volume, bool Muted, bool CanControl = true);

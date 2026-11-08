@@ -8,8 +8,12 @@ namespace PhoneBox.Agent;
 
 public sealed record QuotaLimit(string Label, double Percent, long? ResetsAt, long? WindowSec, string Severity);
 
+public sealed record CodexUsage(string? Model, string? Effort, long? TotalInput, long? TotalCached,
+    long? TotalOutput, long? TotalReasoning, long? TotalTokens, long? LastInput, long? LastOutput,
+    long? ContextWindow, long UpdatedAt);
+
 public sealed record QuotaProvider(string Id, string Name, string Plan, IReadOnlyList<QuotaLimit> Limits,
-    string? Extra, long? UpdatedAt, string? Error);
+    string? Extra, long? UpdatedAt, string? Error, CodexUsage? Codex = null);
 
 /// <summary>
 /// Collects quota usage of AI subscriptions:
@@ -190,14 +194,63 @@ public sealed partial class QuotaMonitor(ILogger<QuotaMonitor> log) : Background
             if (rl.TryGetProperty("credits", out var cr) && cr.ValueKind == JsonValueKind.Object)
             {
                 if (cr.TryGetProperty("unlimited", out var u) && u.ValueKind == JsonValueKind.True) extra = "Credits: unlimited";
-                else if (Str(cr, "balance") is { } b && double.TryParse(b, NumberStyles.Float, CultureInfo.InvariantCulture, out var bal))
+                else if (cr.TryGetProperty("has_credits", out var has) && has.ValueKind == JsonValueKind.True
+                    && Str(cr, "balance") is { } b && double.TryParse(b, NumberStyles.Float, CultureInfo.InvariantCulture, out var bal))
                     extra = "Credits: " + bal.ToString("#,0", CultureInfo.InvariantCulture);
+                else if (has.ValueKind == JsonValueKind.False) extra = "Credits not enabled";
             }
+            var reached = limits.Any(l => l.Percent >= 100)
+                || rl.TryGetProperty("rate_limit_reached_type", out var reachedType) && reachedType.ValueKind == JsonValueKind.String
+                || rl.TryGetProperty("spend_control_reached", out var spend) && spend.ValueKind == JsonValueKind.True;
+            if (reached) extra = string.IsNullOrEmpty(extra) ? "Limit reached" : "Limit reached · " + extra;
             var plan = Str(rl, "plan_type") is { } pt ? char.ToUpper(pt[0]) + pt[1..] : "Codex";
             return new QuotaProvider("codex", "Codex", plan, limits, extra,
-                new DateTimeOffset(f.LastWriteTimeUtc).ToUnixTimeMilliseconds(), null);
+                new DateTimeOffset(f.LastWriteTimeUtc).ToUnixTimeMilliseconds(), null, ReadCodexUsage(f.FullName));
         }
         return new QuotaProvider("codex", "Codex", "Codex", [], null, null, "No quota data in recent sessions");
+    }
+
+    private static CodexUsage? ReadCodexUsage(string path)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        var len = Math.Min(fs.Length, 1 << 20);
+        fs.Seek(-len, SeekOrigin.End);
+        var buf = new byte[len];
+        fs.ReadExactly(buf);
+        var lines = Encoding.UTF8.GetString(buf).Split('\n');
+        string? model = null, effort = null;
+        JsonElement? info = null;
+        long updatedAt = new DateTimeOffset(File.GetLastWriteTimeUtc(path)).ToUnixTimeMilliseconds();
+        for (var i = lines.Length - 1; i >= 1 && (info is null || model is null); i--)
+        {
+            var line = lines[i];
+            if (!line.Contains("\"token_count\"") && !line.Contains("\"turn_context\"")) continue;
+            try
+            {
+                using var doc = JsonDocument.Parse(line);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("payload", out var payload)) continue;
+                if (info is null && Str(payload, "type") == "token_count"
+                    && payload.TryGetProperty("info", out var tokenInfo) && tokenInfo.ValueKind == JsonValueKind.Object)
+                {
+                    info = tokenInfo.Clone();
+                    if (DateTimeOffset.TryParse(Str(root, "timestamp"), out var timestamp)) updatedAt = timestamp.ToUnixTimeMilliseconds();
+                }
+                if (model is null && root.TryGetProperty("type", out var type) && type.GetString() == "turn_context")
+                {
+                    model = Str(payload, "model");
+                    effort = Str(payload, "effort");
+                }
+            }
+            catch (JsonException) { /* partial line at the start of the tail */ }
+        }
+        if (info is null && model is null) return null;
+        var token = info ?? default;
+        var total = token.ValueKind == JsonValueKind.Object && token.TryGetProperty("total_token_usage", out var t) ? t : default;
+        var last = token.ValueKind == JsonValueKind.Object && token.TryGetProperty("last_token_usage", out var l) ? l : default;
+        return new CodexUsage(model, effort, Long(total, "input_tokens"), Long(total, "cached_input_tokens"),
+            Long(total, "output_tokens"), Long(total, "reasoning_output_tokens"), Long(total, "total_tokens"),
+            Long(last, "input_tokens"), Long(last, "output_tokens"), Long(token, "model_context_window"), updatedAt);
     }
 
     /// <summary>Reads the last 1 MB of a file and returns the last line containing the given text.</summary>
@@ -218,5 +271,6 @@ public sealed partial class QuotaMonitor(ILogger<QuotaMonitor> log) : Background
     private static QuotaProvider Fail(string id, string name, string msg) => new(id, name, name, [], null, null, msg);
     private static string? Str(JsonElement e, string p) => e.TryGetProperty(p, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
     private static double? Num(JsonElement e, string p) => e.TryGetProperty(p, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : null;
+    private static long? Long(JsonElement e, string p) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(p, out var v) && v.TryGetInt64(out var n) ? n : null;
     private static long? Iso(string? s) => DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d.ToUnixTimeMilliseconds() : null;
 }

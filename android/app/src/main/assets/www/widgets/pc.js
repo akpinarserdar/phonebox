@@ -441,6 +441,7 @@ W.volume = {
       box.classList.toggle('muted', !!muted);
     };
     const fromPointer = (e) => {
+      if (!D.state?.audio?.canControl) return;
       const r = bar.getBoundingClientRect();
       const f = vertical() ? 1 - (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
       const v = Math.round(Math.max(0, Math.min(1, f)) * 100);
@@ -455,7 +456,13 @@ W.volume = {
     mute.addEventListener('click', op('op=mute'));
     down.addEventListener('click', op('op=down'));
     up.addEventListener('click', op('op=up'));
-    return { update() { const a = D.state?.audio; if (a && !dragging) paint(a.volume, a.muted); } };
+    return { update() {
+      const a = D.state?.audio;
+      box.classList.toggle('unavailable', !a?.canControl);
+      mute.disabled = down.disabled = up.disabled = !a?.canControl;
+      if (a && !dragging) paint(a.volume, a.muted);
+      else if (!a) { pct.textContent = 'n/a'; fill.style.width = fill.style.height = '0'; }
+    } };
   },
 };
 
