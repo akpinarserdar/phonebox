@@ -170,7 +170,9 @@ Double-click the tray icon on Windows (or open <http://127.0.0.1:8765>):
   vibration, volume-key paging and the phone's sensors (brightness that follows the room, the night screen when the
   room goes dark, wave to wake it); [page switching](#rules) (home page, countdown, back home after);
   kiosk options (screen pinning, the panel as the phone's home screen so it starts after a reboot, keep the phone
-  awake on the charger; no root needed); [battery care](#rules); [Claude Code permission prompts](#claude-code-permission-prompts);
+  awake on the charger; no root needed); on macOS, optionally follow the computer lock (sleep the phone on lock,
+  wake it and open PhoneBox on unlock, with an ADB connection); [battery care](#rules);
+  [Claude Code permission prompts](#claude-code-permission-prompts);
   phones (several at once, each with its own pages); Wi-Fi & Tailscale; updates.
 - **Advanced**: the raw JSON.
 

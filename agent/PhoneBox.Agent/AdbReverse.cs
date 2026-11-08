@@ -53,6 +53,24 @@ public sealed class AdbReverse(ConfigStore cfg, ILogger<AdbReverse> log) : Backg
         }
     }
 
+    /// <summary>ADB's sleep and wake keys are idempotent, unlike the power key.</summary>
+    public async Task SetScreenForSessionAsync(bool locked, CancellationToken ct)
+    {
+        var adb = FindAdb(cfg.Get().AdbPath);
+        if (adb is null) return;
+        foreach (var d in _devices)
+        {
+            if (locked) await Adb(adb, $"-s {d} shell input keyevent KEYCODE_SLEEP", ct);
+            else
+            {
+                await Adb(adb, $"-s {d} shell input keyevent KEYCODE_WAKEUP", ct);
+                // A non-secure swipe keyguard remains visible after WAKEUP; this dismisses it without bypassing a PIN.
+                await Adb(adb, $"-s {d} shell wm dismiss-keyguard", ct);
+                await Adb(adb, $"-s {d} shell am start -n {PanelActivity}", ct);
+            }
+        }
+    }
+
     private async Task Ensure(CancellationToken ct)
     {
         var adb = FindAdb(cfg.Get().AdbPath);
@@ -95,10 +113,18 @@ public sealed class AdbReverse(ConfigStore cfg, ILogger<AdbReverse> log) : Backg
             if (!installed) { Report($"{d}: the PhoneBox app is not installed (Settings › General › Install the phone app)"); continue; }
             if (list.Contains(Rule)) continue;
             await Adb(adb, $"-s {d} reverse {Rule} {Rule}", ct);
-            // Newly plugged in: wake the screen and open the panel.
-            await Adb(adb, $"-s {d} shell input keyevent KEYCODE_WAKEUP", ct);
-            await Adb(adb, $"-s {d} shell am start -n {PanelActivity}", ct);
-            log.LogInformation("{Device}: adb reverse set up, panel opened", d);
+            // A newly plugged-in phone must not light up while the computer is locked.
+            if (cfg.Get().Display.FollowComputerLock && MacSessionLock.IsLocked() == true)
+            {
+                await Adb(adb, $"-s {d} shell input keyevent KEYCODE_SLEEP", ct);
+                log.LogInformation("{Device}: adb reverse set up, screen kept asleep", d);
+            }
+            else
+            {
+                await Adb(adb, $"-s {d} shell input keyevent KEYCODE_WAKEUP", ct);
+                await Adb(adb, $"-s {d} shell am start -n {PanelActivity}", ct);
+                log.LogInformation("{Device}: adb reverse set up, panel opened", d);
+            }
         }
         // Settings › Display › home screen: the app offers itself as a home app; make it the default one (no root needed).
         if (cfg.Get().Display.HomeScreen)
