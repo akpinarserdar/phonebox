@@ -25,7 +25,7 @@ public sealed class ApprovalExpiryTests : IDisposable
             NullLogger<ApprovalStore>.Instance, _clock);
         Interlocked.Exchange(ref ApprovalStore.PhoneLastSeen, long.MaxValue);
     }
-    private Approval Request(long expires) => new("test", "test", "s", "p", "tool", "detail", null, _clock.Now, expires);
+    private Approval Request(long expires) => new("test", "test", "s", "p", "/work/p", "tool", "detail", null, _clock.Now, expires);
 
     [Theory]
     [InlineData(-1)]

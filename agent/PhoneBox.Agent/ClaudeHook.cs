@@ -17,6 +17,11 @@ public static class ClaudeHook
 
     /// <summary>Handles one hook call; returns the JSON for the hook to print, or null for "no decision".</summary>
     public static async Task<object?> HandleAsync(JsonElement input, ConfigStore cfg, ApprovalStore approvals, SessionMonitor sessions, CancellationToken aborted)
+        => await HandlePermissionAsync(input, cfg, approvals, sessions, aborted, "Claude Code", "claude:", allowQuestions: true);
+
+    /// <summary>Shared PermissionRequest protocol used by Claude Code, Codex and compatible agents.</summary>
+    internal static async Task<object?> HandlePermissionAsync(JsonElement input, ConfigStore cfg, ApprovalStore approvals,
+        SessionMonitor sessions, CancellationToken aborted, string source, string sessionPrefix, bool allowQuestions)
     {
         if (input.ValueKind != JsonValueKind.Object) return null;
         var c = cfg.Get().Claude;
@@ -25,14 +30,15 @@ public static class ClaudeHook
 
         var tool = Str(input, "tool_name") ?? "a tool";
         var ti = input.TryGetProperty("tool_input", out var t) && t.ValueKind == JsonValueKind.Object ? t : default;
-        var cwd = Str(input, "cwd") ?? "";
+        var cwd = (Str(input, "cwd") ?? "").Trim();
         var sessionId = Str(input, "session_id") ?? "";
-        var session = sessions.Snapshot().FirstOrDefault(s => s.Id == "claude:" + sessionId);
+        var session = sessions.Snapshot().FirstOrDefault(s => s.Id == sessionPrefix + sessionId);
         var project = session?.Name ?? ProjectName(cwd);
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         // AskUserQuestion is a question, not a permission: Allow would only open the same question in the terminal.
-        var question = tool == "AskUserQuestion";
-        var a = new Approval(ApprovalStore.NewId(), "Claude Code", sessionId, project, ToolTitle(tool), question ? QuestionDetail(ti) : Detail(tool, ti),
+        var question = allowQuestions && tool == "AskUserQuestion";
+        var shownCwd = cwd.Length <= 1000 ? cwd : "…" + cwd[^999..];
+        var a = new Approval(ApprovalStore.NewId(), source, sessionId, project, shownCwd, ToolTitle(tool), question ? QuestionDetail(ti) : Detail(tool, ti),
             ti.ValueKind == JsonValueKind.Object ? Str(ti, "description") : null, now, now + Math.Clamp(c.TimeoutSec, 10, 3600) * 1000L,
             question ? "question" : "permission");
 
@@ -124,16 +130,19 @@ public static class ClaudeHook
 
     // ---------------------------------------------------------------- install / remove the hook in ~/.claude/settings.json
 
-    private static string HookCommand(int port) =>
-        $"{(OperatingSystem.IsWindows() ? "curl.exe" : "curl")} -s --max-time 3600 -X POST http://127.0.0.1:{port}{Endpoint} -H \"Content-Type: application/json\" --data-binary \"@-\"";
+    private static string HookCommand(int port, string endpoint) =>
+        $"{(OperatingSystem.IsWindows() ? "curl.exe" : "curl")} -s --max-time 3600 -X POST http://127.0.0.1:{port}{endpoint} -H \"Content-Type: application/json\" --data-binary \"@-\"";
 
-    private static bool IsOurs(JsonNode? hook) =>
+    private static bool IsOurs(JsonNode? hook, string endpoint) =>
         hook is JsonObject obj && obj["command"] is JsonValue v && v.TryGetValue<string>(out var cmd)
-        && cmd.Contains(Endpoint, StringComparison.Ordinal);
+        && cmd.Contains(endpoint, StringComparison.Ordinal);
 
     public static bool Installed() => Installed(SettingsPath);
 
     internal static bool Installed(string path)
+        => Installed(path, Endpoint);
+
+    internal static bool Installed(string path, string endpoint)
     {
         try
         {
@@ -141,7 +150,7 @@ public static class ClaudeHook
             return root is JsonObject obj
                 && obj["hooks"] is JsonObject hooks
                 && hooks["PermissionRequest"] is JsonArray groups
-                && groups.Any(g => g is JsonObject go && go["hooks"] is JsonArray hs && hs.Any(IsOurs));
+                && groups.Any(g => g is JsonObject go && go["hooks"] is JsonArray hs && hs.Any(h => IsOurs(h, endpoint)));
         }
         catch { return false; }
     }
@@ -151,6 +160,9 @@ public static class ClaudeHook
         Configure(install, port, timeoutSec, SettingsPath);
 
     internal static string? Configure(bool install, int port, int timeoutSec, string path)
+        => Configure(install, port, timeoutSec, path, Endpoint);
+
+    internal static string? Configure(bool install, int port, int timeoutSec, string path, string endpoint)
     {
         try
         {
@@ -180,7 +192,7 @@ public static class ClaudeHook
             foreach (var g in groups.ToList())
             {
                 if (g is not JsonObject go || go["hooks"] is not JsonArray hs) continue;
-                foreach (var h in hs.Where(IsOurs).ToList()) hs.Remove(h);
+                foreach (var h in hs.Where(h => IsOurs(h, endpoint)).ToList()) hs.Remove(h);
                 if (hs.Count == 0) groups.Remove(g);
             }
             if (install)
@@ -190,7 +202,7 @@ public static class ClaudeHook
                     ["hooks"] = new JsonArray(new JsonObject
                     {
                         ["type"] = "command",
-                        ["command"] = HookCommand(port),
+                        ["command"] = HookCommand(port, endpoint),
                         ["timeout"] = Math.Clamp(timeoutSec, 10, 3600) + 15,
                     }),
                 });

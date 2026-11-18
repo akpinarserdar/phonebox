@@ -46,7 +46,7 @@ public sealed class QuestionPromptTests
         var store = new ApprovalStore(new PushStore(NullLogger<PushStore>.Instance, Path.Combine(Path.GetTempPath(), "phonebox-q-" + Guid.NewGuid().ToString("N") + ".json")), NullLogger<ApprovalStore>.Instance);
         Interlocked.Exchange(ref ApprovalStore.PhoneLastSeen, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var a = new Approval("q1", "Claude Code", "s", "p", "Claude has a question", "text", null, now, now + 30_000, "question");
+        var a = new Approval("q1", "Claude Code", "s", "p", "/work/p", "Claude has a question", "text", null, now, now + 30_000, "question");
         var asking = store.AskAsync(a, CancellationToken.None);
         Assert.Equal("question", Assert.Single(store.Snapshot()).Kind);
         Assert.True(store.Decide("q1", "skip"));

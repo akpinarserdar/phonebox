@@ -6,13 +6,13 @@ namespace PhoneBox.Agent;
 /// <param name="Tool">The tool Claude Code wants to use (Bash, Edit, Write, WebFetch, an MCP tool…).</param>
 /// <param name="Detail">What it wants to do: the command, the file path, the URL…</param>
 /// <param name="Kind">"permission" (Allow / Deny) or "question" (Claude is asking something; it is answered in the terminal).</param>
-public sealed record Approval(string Id, string Source, string Session, string Project, string Tool, string Detail,
+public sealed record Approval(string Id, string Source, string Session, string Project, string Cwd, string Tool, string Detail,
     string? Description, long CreatedAt, long ExpiresAt, string Kind = "permission");
 
 /// <summary>
-/// Permission prompts waiting for an answer from the phone. A Claude Code hook posts the request and waits; the
+/// Permission prompts waiting for an answer from the phone. An AI coding-agent hook posts the request and waits; the
 /// phone shows Allow / Deny and posts the decision back. If no phone is around, or nobody answers in time, the request
-/// ends without a decision and Claude Code asks in the terminal as usual.
+/// ends without a decision and the coding agent asks in its normal UI as usual.
 /// </summary>
 public sealed class ApprovalStore(PushStore events, ILogger<ApprovalStore> log)
 {

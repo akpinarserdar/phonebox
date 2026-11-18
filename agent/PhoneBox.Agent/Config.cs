@@ -201,9 +201,9 @@ public sealed class UpdateConfig
 
 public sealed class ClaudeConfig
 {
-    /// <summary>Show Claude Code permission prompts on the phone (needs the hook, see Settings › General).</summary>
+    /// <summary>Show AI coding-agent permission prompts on the phone (needs an agent hook, see Settings › General).</summary>
     public bool PhoneApprovals { get; set; } = true;
-    /// <summary>How long the phone may take before Claude Code asks in the terminal instead.</summary>
+    /// <summary>How long the phone may take before the coding agent asks in its normal UI instead.</summary>
     public int TimeoutSec { get; set; } = 90;
     /// <summary>Only use the phone when the PC has been idle for a minute (you are away from the keyboard).</summary>
     public bool OnlyWhenAway { get; set; }

@@ -2,7 +2,7 @@
 
 [Back to PhoneBox](../README.md) · [Installation and connections](SETUP.md) · [Development](DEVELOPMENT.md)
 
-[Appearance](#appearance) · [Control Deck](#control-deck) · [Pages & templates](#pages--templates) · [Widgets](#widgets) · [Layout editor & settings](#layout-editor--settings) · [Claude Code permission prompts](#claude-code-permission-prompts) · [Webhooks](#webhooks) · [Rules](#rules) · [Security & privacy](#security--privacy)
+[Appearance](#appearance) · [Control Deck](#control-deck) · [Pages & templates](#pages--templates) · [Widgets](#widgets) · [Layout editor & settings](#layout-editor--settings) · [AI agent permission prompts](#ai-agent-permission-prompts) · [Webhooks](#webhooks) · [Rules](#rules) · [Security & privacy](#security--privacy)
 
 ## Appearance
 
@@ -147,7 +147,7 @@ Double-click the tray icon on Windows (or open <http://127.0.0.1:8765>):
   awake on the charger; no root needed); on macOS, optionally follow the computer lock (sleep the phone on lock,
   wake it and open PhoneBox on unlock, with an ADB connection; phones secured by a PIN or password must be unlocked
   manually). Lock sync needs the agent to run in the macOS GUI session; [battery care](#rules);
-  [Claude Code permission prompts](#claude-code-permission-prompts);
+  [AI agent permission prompts](#ai-agent-permission-prompts);
   phones (several at once, each with its own pages); Wi-Fi & Tailscale; updates.
 - **Advanced**: the raw JSON.
 
@@ -157,7 +157,13 @@ Use UTF-8 when editing this file externally. Saved page and shortcut icons use J
 ANSI-based editors; the settings editor displays the actual symbols. On startup, known double-encoded forms of
 the four affected default icons are repaired, with the original file kept in `config.json.bak`.
 
-## Claude Code permission prompts
+## AI agent permission prompts
+
+When Codex asks for permission (run a command, edit a file, use an MCP tool…), the phone shows the project, tool and
+operation with **Allow** and **Deny**. Turn it on in **Settings › General › AI coding agent permission prompts** and
+install the Codex hook. PhoneBox adds a `PermissionRequest` command hook to `~/.codex/hooks.json`, preserving other
+hooks and keeping a backup next to the file. Codex requires new or changed hooks to be reviewed once: start a new
+Codex session and trust the PhoneBox hook from `/hooks` (CLI) or **Settings › Hooks** (desktop app).
 
 When Claude Code asks for permission (run a command, edit a file, use an MCP tool…), the phone shows the request —
 project, tool and the command or file — with **Allow** and **Deny**. Turn it on in **Settings › General › Claude Code
@@ -261,7 +267,7 @@ switchable ports). The panel keeps running over Wi-Fi while the USB power is off
   on its own.
 - Ending processes is limited to your own session, never touches a list of Windows-critical processes, and can be
   switched off in the processes widget's options.
-- **Claude Code permission prompts** are opt-in. The hook only posts the request to the agent on `127.0.0.1`; the
+- **AI agent permission prompts** are opt-in. Codex and Claude Code hooks only post the request to the agent on `127.0.0.1`; the
   phone can only answer allow or deny for that one request.
 - **Claude quota:** read with the OAuth token Claude Code stores in `~/.claude/.credentials.json`, sent only to
   `api.anthropic.com/api/oauth/usage` (the endpoint behind Claude Code's `/usage`). The token is read-only: PhoneBox

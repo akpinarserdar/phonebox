@@ -46,7 +46,7 @@ public sealed class ApprovalOutcomeTests : IDisposable
         Directory.Delete(_dir, recursive: true);
     }
 
-    private Approval Request(long expires) => new("test", "test", "s", "p", "tool", "detail", null, _clock.Now, expires);
+    private Approval Request(long expires) => new("test", "test", "s", "p", "/work/p", "tool", "detail", null, _clock.Now, expires);
 
     // With 100 ms left the request ends after those 100 ms (no one-second floor), and leaves the phone's list at its expiry.
     [Fact]

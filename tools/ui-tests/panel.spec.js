@@ -293,6 +293,21 @@ test('a Claude Code permission prompt can be answered', async ({ page }) => {
   await expect(prompt).toBeHidden();
 });
 
+test('a Codex permission prompt shows the Codex mark, project and working directory', async ({ page }) => {
+  await page.goto('/panel/');
+  await expect(page.locator('.w').first()).toBeVisible();
+  await page.evaluate(() => window.PhoneBoxDemo.ask({ source: 'Codex', project: 'phonebox', cwd: '/Users/me/Desktop/applications/phonebox',
+    tool: 'Run a command', detail: 'npm test', description: 'Run the test suite' }));
+  const prompt = page.locator('#approval');
+  await expect(prompt).toBeVisible();
+  await expect(page.locator('#apLogo')).toHaveText('◎');
+  await expect(page.locator('#apSource')).toHaveText('Codex');
+  await expect(page.locator('#apProject')).toHaveText('phonebox');
+  await expect(page.locator('#apCwd')).toHaveText('/Users/me/Desktop/applications/phonebox');
+  await prompt.getByRole('button', { name: 'Deny' }).click();
+  await expect(prompt).toBeHidden();
+});
+
 test('the page dots and the Allow / Deny buttons can sit at the top (#181)', async ({ page }) => {
   await page.goto('/panel/');
   await page.evaluate(() => {

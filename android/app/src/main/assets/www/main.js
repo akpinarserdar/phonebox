@@ -889,7 +889,7 @@ export function handleNotify(d) {
   if (d.page != null) requestPage({ page: d.page, name: d.title || null, countdown: Number.isFinite(countdown) ? Math.min(30, Math.max(0, countdown)) : undefined });
 }
 
-// ---------------------------------------------------------------- permission prompts (Claude Code hook → phone)
+// ---------------------------------------------------------------- permission prompts (AI coding-agent hook → phone)
 export let approvals = [];
 export let approvalShown = null;
 
@@ -943,8 +943,15 @@ export function renderApproval() {
   const asking = a.kind === 'question';
   $('apAllow').hidden = $('apDeny').hidden = asking;
   $('apSkip').hidden = !asking;
-  $('apSource').textContent = a.source || 'Claude Code';
+  const source = a.source || 'AI agent';
+  const sourceKind = /codex/i.test(source) ? 'codex' : /claude/i.test(source) ? 'claude' : 'agent';
+  $('apLogo').textContent = sourceKind === 'codex' ? '◎' : sourceKind === 'claude' ? '✳' : '◆';
+  $('apLogo').className = `ap-logo ${sourceKind}`;
+  $('apSource').textContent = source;
   $('apProject').textContent = a.project || a.session || '';
+  $('apCwd').textContent = a.cwd || '';
+  $('apCwd').title = a.cwd || '';
+  $('apContextSep').hidden = !(a.cwd && (a.project || a.session));
   $('apCount').textContent = approvals.length > 1 ? t('panel.oneOfN', { n: approvals.length }) : '';
   $('apTool').textContent = a.tool;
   $('apDesc').textContent = a.description || '';
